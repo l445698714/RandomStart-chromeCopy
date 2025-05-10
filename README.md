@@ -12,6 +12,12 @@
 - **状态显示**：实时显示启动的编号和剩余未启动的编号。
 - **可调节启动延迟**：用户可以设置每次启动 Chrome 分身之间的延迟时间（单位：秒），以避免系统负载过高。
 
+## ~ 如果您觉得这个工具对您有帮助，可以请我喝杯蜜雪冰城，增加更多功能和分享更多小工具 ~
+![image](https://github.com/user-attachments/assets/b7810000-78d3-4c6b-a10d-cee4d22d6845)
+![image](https://github.com/user-attachments/assets/11952997-dd5d-4311-a085-8145acdb4950)
+
+## 联系方式
+https://x.com/StayrealLoL
 ## 使用方法
 
 1. **参数设置**：
