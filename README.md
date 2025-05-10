@@ -11,6 +11,8 @@
 - **关闭所有 Chrome 窗口**：一键关闭所有打开的 Chrome 浏览器窗口。
 - **状态显示**：实时显示启动的编号和剩余未启动的编号。
 - **可调节启动延迟**：用户可以设置每次启动 Chrome 分身之间的延迟时间（单位：秒），以避免系统负载过高。
+- ![image](https://github.com/user-attachments/assets/db8ac557-8e22-45d2-96bb-59a386311908)
+
 
 ## ~ 如果您觉得这个工具对您有帮助，可以请我喝杯蜜雪冰城，增加更多功能和分享更多小工具 ~
 ![image](https://github.com/user-attachments/assets/b7810000-78d3-4c6b-a10d-cee4d22d6845)
