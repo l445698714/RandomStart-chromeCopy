@@ -1,1 +1,32 @@
- 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build artifacts
+dist/
+build/
+*.spec
+
+# Virtual environment (if you use one)
+.venv/
+venv/
+ENV/
+env/
+*.env
+env.bak/
+venv.bak/
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# Other
+# Например, если у вас есть README.txt и вы предпочитаете README.md
+# README.txt 
