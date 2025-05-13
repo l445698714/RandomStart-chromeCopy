@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+
 """
 Chrome分身启动器 - PyQt5版本
 功能：随机启动Chrome分身、指定范围启动、指定范围关闭、关闭所有、在已打开分身中打开网址
@@ -157,7 +156,7 @@ class BackgroundWorker(QThread):
                     if proc.info['cmdline'] is None:
                         continue
                     cmd_line_str = " ".join(proc.info['cmdline'])
-                    # 使用更精确的正则匹配 --user-data-dir="...\chromeN..." 或 --user-data-dir=...\chromeN...
+                    # 使用更精确的正则匹配 --user-data-dir=\"...\\chromeN...\" 或 --user-data-dir=...\\chromeN...
                     user_data_dir_arg_match = re.search(r"--user-data-dir=(?:\"([^\"]*)\"|([^ ]+(?: [^ ]+)*?(?=(?: --|$))))", cmd_line_str)
                     if user_data_dir_arg_match:
                         user_data_path_from_cmd = user_data_dir_arg_match.group(1) or user_data_dir_arg_match.group(2)
@@ -205,12 +204,12 @@ class BackgroundWorker(QThread):
 
 
     def open_url_in_browsers(self):
-        """在指定的Chrome分身中打开URL (self.profiles_data 是 (编号, 用户数据目录路径, chrome_exe路径) 元组的列表)"""
+        """在指定的Chrome分身中打开URL (self.profiles_data 是 (用户数据目录路径, chrome_exe路径) 元组的列表)"""
         success_count = 0
-        successful_numbers = [] # 用于记录成功操作的分身编号
+        successful_instances_info = [] # 用于记录成功操作的实例信息 (udd)
 
         if not self.profiles_data: # 检查列表是否为空
-            self.finished.emit("没有已运行的分身来打开网址", "orange", [])
+            self.finished.emit("没有已运行的Chrome实例来打开网址", "orange", [])
             return
             
         total_steps = len(self.profiles_data)
@@ -219,44 +218,42 @@ class BackgroundWorker(QThread):
             progress = int((i + 1) / total_steps * 100)
             self.update_progress.emit(progress)
             
-            # 解包 profile_entry
-            if len(profile_entry) == 3:
-                profile_num, user_data_dir, specific_chrome_exe_path = profile_entry
+            # 解包 profile_entry - 新格式: (user_data_dir, specific_chrome_exe_path)
+            if len(profile_entry) == 2:
+                user_data_dir, specific_chrome_exe_path = profile_entry
             else:
-                # 旧格式或其他错误，记录并跳过
                 self.update_status.emit(f"警告: profiles_data 条目格式不正确，跳过。数据: {profile_entry}", "red")
                 continue
 
             try:
                 if not specific_chrome_exe_path or not os.path.exists(specific_chrome_exe_path):
-                    self.update_status.emit(f"警告: 分身 {profile_num} 的 Chrome.exe 路径无效或未找到: {specific_chrome_exe_path}", "red")
+                    self.update_status.emit(f"警告: Chrome.exe 路径无效或未找到: {specific_chrome_exe_path} (UDD: {os.path.basename(user_data_dir)})", "red")
                     continue
 
-                if not isinstance(user_data_dir, str) or not os.path.isdir(os.path.dirname(user_data_dir)):
-                     # 检查父目录是否存在，因为user_data_dir本身可能在首次启动前不存在，但其父目录应有效才能创建它
-                     # 不过对于"在已运行分身中打开"，user_data_dir 理论上应该已存在。
-                     self.update_status.emit(f"警告: 分身 {profile_num} 的用户数据目录路径无效: {user_data_dir}", "red")
+                if not isinstance(user_data_dir, str) or not os.path.isdir(user_data_dir):
+                     # 对于"在已运行分身中打开"，user_data_dir 应该已存在且为目录。
+                     self.update_status.emit(f"警告: 用户数据目录路径无效或不是目录: {user_data_dir}", "red")
                      continue
 
                 cmd = [
-                    specific_chrome_exe_path, # 使用该分身特定的 chrome.exe 路径
-                    f"--user-data-dir={user_data_dir}", # 使用从运行进程中提取的精确路径
+                    specific_chrome_exe_path, 
+                    f"--user-data-dir={user_data_dir}", 
                     self.url
                 ]
                 subprocess.Popen(cmd)
                 success_count += 1
-                successful_numbers.append(profile_num) # 记录分身编号
-                status_text = f"正在打开网址 (分身 {profile_num}): {self.url}"
+                successful_instances_info.append(os.path.basename(user_data_dir)) # 记录 UDD 的 basename 作为标识
+                status_text = f"正在实例 (UDD: ...{os.path.basename(user_data_dir)}) 中打开网址: {self.url}"
                 self.update_status.emit(status_text, "blue")
                 time.sleep(float(self.delay_time))
             except Exception as e:
-                self.update_status.emit(f"警告: 在分身 {profile_num} 中打开网址失败: {str(e)}", "red")
+                self.update_status.emit(f"警告: 在实例 (UDD: {os.path.basename(user_data_dir)}) 中打开网址失败: {str(e)}", "red")
         
         if success_count > 0:
-            status_text = f"成功在 {success_count} 个Chrome分身中打开网址!\n分身编号: {', '.join(map(str, successful_numbers))}"
-            self.finished.emit(status_text, "green", successful_numbers)
+            status_text = f"成功在 {success_count} 个Chrome实例中打开网址!\n实例 (UDD Basenames): {', '.join(successful_instances_info)}"
+            self.finished.emit(status_text, "green", successful_instances_info)
         else:
-            self.finished.emit("错误: 未能在任何指定分身中打开网址 (可能因路径无效或其它错误)", "red", [])
+            self.finished.emit("错误: 未能在任何指定Chrome实例中打开网址", "red", [])
 
 
 class ChromeLauncher(QMainWindow):
@@ -283,16 +280,47 @@ class ChromeLauncher(QMainWindow):
         
         # 初始化设置
         self.settings = QSettings("ChromeLauncher", "Settings")
-        
+
+        # 定义用于从命令行提取分身编号的正则表达式模式
+        # 这些模式会在多个地方使用 (如 open_url_in_running, _sync_launched_numbers_with_running_processes)
+        self.profile_num_patterns = [
+            re.compile(r"chrome[\\/]?(\\d+)", re.IGNORECASE), # 匹配 chrome<N> 或 chrome/<N> 或 chrome\\<N>
+            re.compile(r"profile[\\/]?(\\d+)", re.IGNORECASE), # 匹配 profile<N>
+            # 匹配 --user-data-dir=\"...chrome<N>...\" 或 --user-data-dir=...chrome<N>...
+            # 修正: 确保 \\d+ 在 python 字符串中正确表示，并且在 regex 中也是 \d+
+            # 正则表达式中的 \d 需要转义为 \\d，但在 Python 原始字符串 r\"\" 中不需要额外转义
+            re.compile(r"--user-data-dir(?:\\\"|'|=|\s)+.*?chrome(\\\\\\d+)", re.IGNORECASE),
+            # 匹配 --profile-directory=Default 或 --profile-directory=\"Profile <N>\"
+            # 对于 \"Default\", 我们通常映射到0号或特殊处理，这里主要关注 \"Profile <N>\"
+            re.compile(r"--profile-directory=(?:\\\"Profile\\s+(\\\\\\d+)\\\"?|Default)", re.IGNORECASE)
+        ]
+        # 修正 user_data_dir 正则表达式以正确处理包含空格且未加引号的路径
+        # self.user_data_dir_pattern = re.compile(r'--user-data-dir=(?P<quoted>\"([^\"]*)\")|(?P<unquoted>[^ ](?:.*?[^ ])?(?=(?: --|$)))') # 旧模式
+        # self.user_data_dir_pattern = re.compile(r'--user-data-dir=(?:\"(?P<path>[^"]+)\"|(?P<path_unquoted>[^\\\\s]+(?:\\\\s+[^\\\\s]+)*?(?=\\\\s*--|\\\\s*$)))') # 错误修正前的版本
+        self.user_data_dir_pattern = re.compile(r'--user-data-dir=(?:\"(?P<path>[^"]+)\"|(?P<path_unquoted>[^\s]+(?:\s+[^\s]+)*?(?=\s*--|\s*$)))') # 正确修正后的版本
+
         # 初始化UI
         self.init_ui()
         
-        # 加载保存的设置
+        # 加载保存的设置 (包括 launched_numbers 的初始加载)
         self.load_settings()
+        
+        # 同步/刷新 launched_numbers 以匹配当前实际运行的Chrome分身
+        self._sync_launched_numbers_with_running_processes()
         
         # 应用浅色主题样式
         self.apply_light_theme()
-        
+            
+        initial_status_message = "准备就绪。"
+        if self.launched_numbers:
+            sorted_launched_numbers = sorted(list(self.launched_numbers))
+            launched_numbers_str = ", ".join(map(str, sorted_launched_numbers))
+            initial_status_message += f" 当前已通过编号识别并记录的已启动分身: {launched_numbers_str}。"
+        else:
+            initial_status_message += " 当前没有通过编号识别的已启动分身被记录。"
+        self.set_status(initial_status_message, "blue")
+        self.statusBar.showMessage(f"就绪。已记录编号分身: {len(self.launched_numbers)} 个。")
+    
     def init_ui(self):
         """初始化用户界面"""
         # 设置中心部件
@@ -698,28 +726,37 @@ class ChromeLauncher(QMainWindow):
         # 更新已启动编号集合
         for num in successful_numbers:
             self.launched_numbers.add(num)
+        if successful_numbers: # 只有成功启动了才保存
+            self.save_settings()
 
         main_message = ""
         if successful_numbers:
-            # 构建新的成功消息
             launched_str = ", ".join(map(str, sorted(successful_numbers)))
             if len(successful_numbers) == 1:
                 main_message = f"成功启动分身 {launched_str}。"
             else:
                 main_message = f"成功启动分身: {launched_str}。"
             current_color = "green"
-        elif "没有选择任何分身" in status_text_from_worker: # 来自 worker 的特殊情况
+        elif "没有选择任何分身" in status_text_from_worker: 
             main_message = status_text_from_worker
             current_color = "orange"
-        else: # 一般的失败或无操作情况，可以部分采纳worker的原始信息
+        else: 
             main_message = f"启动操作已处理。{status_text_from_worker.split('!')[0] if '!' in status_text_from_worker else status_text_from_worker}."
-            current_color = color # 沿用worker的颜色
+            current_color = color
 
         remaining_count = self._get_remaining_in_range_count(self._last_operation_scope_profiles)
-        if self._last_operation_scope_profiles: # 只有当范围被记录时才添加剩余信息
+        if self._last_operation_scope_profiles: 
             main_message += f" 当前操作范围内还剩 {remaining_count} 个分身未启动。"
         
-        self.statusBar.showMessage(main_message)
+        # 附加当前所有已启动分身的信息
+        if self.launched_numbers:
+            sorted_launched_numbers = sorted(list(self.launched_numbers))
+            launched_numbers_str = ", ".join(map(str, sorted_launched_numbers))
+            main_message += f" 当前已记录的已启动分身: {launched_numbers_str}。"
+        else:
+            main_message += " 当前没有记录到已启动的分身。"
+            
+        self.statusBar.showMessage(main_message.split('.')[0] + f". 已记录启动: {len(self.launched_numbers)}个.") 
         self.set_status(main_message, current_color) 
         self._last_operation_scope_profiles = [] # 清理
 
@@ -820,6 +857,7 @@ class ChromeLauncher(QMainWindow):
                 self.statusBar.showMessage("已发送关闭所有Chrome窗口的请求")
                 # 清空已启动编号集合
                 self.launched_numbers.clear()
+                self.save_settings() # 保存清空后的状态
                 
         except Exception as e:
             self.set_status(f"关闭Chrome失败: {str(e)}", "red")
@@ -898,14 +936,28 @@ class ChromeLauncher(QMainWindow):
             color: 状态颜色
             closed_numbers: 成功关闭的编号列表
         """
-        self.set_status(status_text, color)
+        # self.set_status(status_text, color) # 旧的简单设置
         self.progress_bar.setVisible(False)
-        self.statusBar.showMessage(f"完成: {status_text.split('!')[0]}!")
+        # self.statusBar.showMessage(f"完成: {status_text.split('!')[0]}!") # 旧的状态栏消息
         
         # 从已启动编号集合中移除已关闭的编号
         for num in closed_numbers:
             if num in self.launched_numbers:
                 self.launched_numbers.remove(num)
+        if closed_numbers: # 只有成功关闭了才保存
+            self.save_settings()
+
+        # 构建新的状态消息，并附加当前所有已启动分身的信息
+        current_status_text_with_launched = status_text
+        if self.launched_numbers:
+            sorted_launched_numbers = sorted(list(self.launched_numbers))
+            launched_numbers_str = ", ".join(map(str, sorted_launched_numbers))
+            current_status_text_with_launched += f" 当前剩余已记录的已启动分身: {launched_numbers_str}。"
+        else:
+            current_status_text_with_launched += " 当前没有剩余记录的已启动分身。"
+        
+        self.set_status(current_status_text_with_launched, color)
+        self.statusBar.showMessage(f"关闭操作完成。已记录启动: {len(self.launched_numbers)} 个。")
     
     def _get_remaining_in_range_count(self, profiles_in_scope_list):
         """计算指定分身编号列表中，还有多少个是未被全局启动的。"""
@@ -1038,6 +1090,7 @@ class ChromeLauncher(QMainWindow):
         if successful_numbers_from_worker and profile_launched_attempt in successful_numbers_from_worker:
             self.launched_numbers.add(profile_launched_attempt)
             self.sequential_launch_current_index += 1
+            self.save_settings() # 保存状态
             
             remaining_in_seq = 0
             next_profile_to_show = None
@@ -1064,12 +1117,19 @@ class ChromeLauncher(QMainWindow):
                 status_msg_on_success += f" 序列 (范围: {self.sequential_launch_active_range_str}) 已全部处理完毕。还剩 0 个待启动。"
                 self.statusBar.showMessage(f"成功 {profile_launched_attempt}。序列完成")
                 self.sequential_launch_range_active = False # 确保重置
+            
+            # 附加总的已启动列表
+            if self.launched_numbers:
+                sorted_launched_numbers_total = sorted(list(self.launched_numbers))
+                launched_numbers_total_str = ", ".join(map(str, sorted_launched_numbers_total))
+                status_msg_on_success += f" (总已启动编号: {launched_numbers_total_str})."
             self.set_status(status_msg_on_success, "green")
 
         else: # 启动失败
-            self.set_status(f"分身 {profile_launched_attempt} 启动失败。错误: {status_text_from_worker}", "red")
-            self.statusBar.showMessage(f"分身 {profile_launched_attempt} 启动失败")
-            # 失败时不递增 current_index，允许重试。计算剩余时应考虑到这一点。
+            # self.set_status(f"分身 {profile_launched_attempt} 启动失败。错误: {status_text_from_worker}", "red") # 旧消息
+            # self.statusBar.showMessage(f"分身 {profile_launched_attempt} 启动失败") # 旧状态栏
+            
+            failure_message = f"分身 {profile_launched_attempt} 启动失败。错误: {status_text_from_worker}."
             remaining_on_fail = 0
             if self.sequential_launch_range_active:
                  # 从当前索引（未改变）开始计算
@@ -1079,22 +1139,28 @@ class ChromeLauncher(QMainWindow):
                     if p_num not in self.launched_numbers:
                         temp_remaining_profiles_on_fail.append(p_num)
                  remaining_on_fail = len(temp_remaining_profiles_on_fail)
+            
             if self.sequential_launch_range_active and remaining_on_fail > 0:
-                self.set_status(f"分身 {profile_launched_attempt} 启动失败。序列中还剩 {remaining_on_fail} 个待启动 (包括当前失败的)。", "red")
-            elif self.sequential_launch_range_active:
-                 self.set_status(f"分身 {profile_launched_attempt} 启动失败。序列中可能还剩 {remaining_on_fail} 个待启动。", "red")
+                failure_message += f" 序列中还剩 {remaining_on_fail} 个待启动 (包括当前失败的)。"
+                self.statusBar.showMessage(f"失败 {profile_launched_attempt}。序列还剩 {remaining_on_fail}。")
+            elif self.sequential_launch_range_active: # 意味着 remaining_on_fail is 0, but sequence was active
+                 failure_message += " 序列中可能没有更多可尝试的未启动项了。"
+                 self.statusBar.showMessage(f"失败 {profile_launched_attempt}。序列可能已无后续。")
+            else: # sequence not active
+                self.statusBar.showMessage(f"分身 {profile_launched_attempt} 启动失败。")
+            
+            # 附加总的已启动列表
+            if self.launched_numbers:
+                sorted_launched_numbers_total_fail = sorted(list(self.launched_numbers))
+                launched_numbers_total_fail_str = ", ".join(map(str, sorted_launched_numbers_total_fail))
+                failure_message += f" (当前总已启动编号: {launched_numbers_total_fail_str})."
+            else:
+                failure_message += " (当前无已记录启动编号)."
+            self.set_status(failure_message, "red")
 
     def open_url_in_running(self):
-        """在已打开的Chrome分身中打开网址（改进版：提取精确的用户数据目录和chrome.exe路径，并使用多种模式识别分身号）"""
+        """在所有已打开的Chrome实例中打开网址 (新思路：直接操作窗口/进程，不再依赖分身编号)"""
         try:
-            # 简化或移除顶层正则健全性检查，因为它已基本验证通过
-            # print("DEBUG: === TOP LEVEL REGEX SANITY CHECK (Simplified) ===")
-            # test_pattern_str = r"chrome(\\\\d+)" # 注意这里原始的 \\d+ 被转义了多次
-            # test_string_to_match = "chrome5"
-            # match_result_direct = re.search(test_pattern_str.replace("\\\\\\\\", "\\\\"), test_string_to_match, re.IGNORECASE) # 修正测试正则
-            # print(f"DEBUG: Sanity check: re.search('{test_string_to_match}' with '{test_pattern_str.replace("\\\\\\\\", "\\\\")}') -> Match: {match_result_direct is not None}")
-            # print("DEBUG: === END OF TOP LEVEL REGEX SANITY CHECK === ")
-
             url = self.url_entry.text().strip()
             if not url:
                 self.set_status("错误: 请输入有效的网址", "red")
@@ -1104,21 +1170,14 @@ class ChromeLauncher(QMainWindow):
             if not url.startswith(('http://', 'https://')):
                 url = 'https://' + url
             
-            target_profiles_info = [] # 将存储 (分身编号, 精确的用户数据目录路径, 该分身的chrome.exe路径)
+            # target_profiles_info 将存储 (用户数据目录路径, 该实例的chrome.exe路径) 元组
+            # 使用字典以 user_data_dir 作为键来自动去重，值为 chrome_exe_path
+            unique_running_instances = {}
             
-            # 正则表达式，用于从命令行参数中提取 user-data-dir。
-            # 使用原始字符串r'...'并确保内部引号符合正则表达式的需要。
-            user_data_dir_pattern = re.compile(r'--user-data-dir=(?:"([^"]*)"|([^ ]+(?: [^ ]+)*?(?=(?: --|$))))')
-            
-            profile_num_patterns = [
-                re.compile(r"chrome[\/\\]?(\d+)", re.IGNORECASE), 
-                re.compile(r"profile[\/\\]?(\d+)", re.IGNORECASE),
-                re.compile(r"user-data-dir(?:\"|'|=|\s)+.*?chrome(\d+)", re.IGNORECASE), # 修正此处的正则
-                re.compile(r"--profile-directory=(?:Default|Profile\s+(\d+))", re.IGNORECASE)
-            ]
-
+            user_data_dir_pattern = self.user_data_dir_pattern # 使用在 __init__ 中定义的模式
             processed_pids = set()
-            print("DEBUG: Starting to scan running Chrome processes (for open_url_in_running)...")
+
+            print("DEBUG_OPEN_URL_NEW: Starting to scan running Chrome processes...")
 
             for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline', 'exe'], ad_value=None):
                 try:
@@ -1137,115 +1196,65 @@ class ChromeLauncher(QMainWindow):
                     cmd_line_str = " ".join(cmd_line_list)
                     proc_exe_path = proc_info['exe']
 
-                    print(f"DEBUG: PID: {proc.pid}, EXE: {proc_exe_path}, CMD_LINE: '{cmd_line_str}'")
-                    
+                    print(f"DEBUG_OPEN_URL_NEW: PID={proc.pid}, EXE='{proc_exe_path}', CMD_LINE='{cmd_line_str}'")
+
                     actual_user_data_dir = None
                     match_ud_dir = user_data_dir_pattern.search(cmd_line_str)
 
                     if match_ud_dir:
-                        raw_group1 = match_ud_dir.group(1)
-                        raw_group2 = match_ud_dir.group(2)
-                        actual_user_data_dir = raw_group1 or raw_group2
-                        if actual_user_data_dir:
-                             actual_user_data_dir = actual_user_data_dir.strip()
-                             # print(f"DEBUG: PID {proc.pid}, Extracted actual_user_data_dir (raw stripped): '{actual_user_data_dir}'")
-                             
-                             # 更详细地打印即将被清理的路径
-                             print(f"DEBUG: PID {proc.pid}, PRE-SANITIZATION UDD (raw stripped): '{actual_user_data_dir}', REPR: {repr(actual_user_data_dir)}")
-
-                             original_udd_for_debug = actual_user_data_dir
-                             actual_user_data_dir = re.sub(r"\s*/prefetch:\d+$", "", actual_user_data_dir, flags=re.IGNORECASE)
-                             if original_udd_for_debug != actual_user_data_dir:
-                                 print(f"DEBUG: PID {proc.pid}, Sanitized UDD from '{original_udd_for_debug}' to '{actual_user_data_dir}'")
-                             
-                             actual_user_data_dir = os.path.normpath(actual_user_data_dir)
-                             # print(f"DEBUG: PID {proc.pid}, Final normalized actual_user_data_dir: '{actual_user_data_dir}'")
-                        # else:
-                            # print(f"DEBUG: PID {proc.pid}, UserDataDirPattern MATCHED but no content in groups.")
-                    # else:
-                        # print(f"DEBUG: PID {proc.pid}, UserDataDirPattern NOT MATCHED.")
-                        
-                    extracted_profile_num = None
-                    for p_pattern in profile_num_patterns:
-                        match_profile = p_pattern.search(cmd_line_str)
-                        if match_profile:
-                            try:
-                                num_str = match_profile.group(1)
-                                if num_str:
-                                    extracted_profile_num = int(num_str)
-                                    # print(f"DEBUG: PID {proc.pid}, Profile num {extracted_profile_num} from cmdline pattern (group 1): {p_pattern.pattern}")
-                                    break 
-                                elif p_pattern.pattern == r"--profile-directory=(?:Default|Profile\\s+(\\d+))" and "Default" in match_profile.group(0):
-                                    extracted_profile_num = 0 
-                                    # print(f"DEBUG: PID {proc.pid}, Profile num {extracted_profile_num} for Default Profile: {p_pattern.pattern}")
-                                    break
-                            except (IndexError, ValueError) as e_parse:
-                                print(f"DEBUG: PID {proc.pid}, Error parsing profile num from pattern {p_pattern.pattern}: {e_parse}")
-                                continue # Continue to next p_pattern
-                    
-                    if extracted_profile_num is None and actual_user_data_dir:
-                        path_basename = os.path.basename(actual_user_data_dir)
-                        profile_num_from_basename_pattern = re.compile(r"chrome(\\d+)", re.IGNORECASE)
-                        match_basename = profile_num_from_basename_pattern.search(path_basename)
-                        if match_basename:
-                            extracted_profile_num = int(match_basename.group(1))
-                            # print(f"DEBUG: PID {proc.pid}, Profile num {extracted_profile_num} from UDD basename: '{path_basename}'")
+                        # 提取路径，优先尝试带引号的路径组，然后尝试不带引号的路径组
+                        raw_udd = match_ud_dir.group('path') or match_ud_dir.group('path_unquoted')
+                        if raw_udd:
+                            actual_user_data_dir = os.path.normpath(raw_udd.strip())
+                            print(f"DEBUG_OPEN_URL_NEW: PID={proc.pid}, Extracted UDD: '{actual_user_data_dir}'")
+                            
+                            # 确保提取到的 user_data_dir 是一个有效的目录，并且 proc_exe_path 存在
+                            if actual_user_data_dir and os.path.isdir(actual_user_data_dir) and \
+                               proc_exe_path and os.path.exists(proc_exe_path):
+                                # 以 user_data_dir 为键，如果已存在，则不更新（保留第一个遇到的exe_path）
+                                # 或者可以更新为最新的，或者基于某种逻辑选择，这里简单保留第一个
+                                if actual_user_data_dir not in unique_running_instances:
+                                    unique_running_instances[actual_user_data_dir] = proc_exe_path
+                                    print(f"DEBUG_OPEN_URL_NEW: PID={proc.pid}, ADDED instance: UDD='{actual_user_data_dir}', EXE='{proc_exe_path}'")
+                                else:
+                                    print(f"DEBUG_OPEN_URL_NEW: PID={proc.pid}, Instance already recorded for UDD: '{actual_user_data_dir}'")
+                            else:
+                                print(f"DEBUG_OPEN_URL_NEW: PID={proc.pid}, SKIPPED - Invalid UDD ('{actual_user_data_dir}', is_dir={os.path.isdir(actual_user_data_dir) if actual_user_data_dir else 'N/A'}) or EXE path ('{proc_exe_path}', exists={os.path.exists(proc_exe_path) if proc_exe_path else 'N/A'}).")
                         else:
-                            parent_basename = os.path.basename(os.path.dirname(actual_user_data_dir))
-                            match_parent_basename = profile_num_from_basename_pattern.search(parent_basename)
-                            if match_parent_basename:
-                                extracted_profile_num = int(match_parent_basename.group(1))
-                                # print(f"DEBUG: PID {proc.pid}, Profile num {extracted_profile_num} from parent of UDD: '{parent_basename}'")
-
-                    if extracted_profile_num is not None and actual_user_data_dir and proc_exe_path:
-                        is_duplicate_key = (extracted_profile_num, actual_user_data_dir)
-                        if is_duplicate_key not in [(k_num, k_udd) for k_num, k_udd, _ in target_profiles_info]: # Check against (num, udd) part only
-                             target_profiles_info.append((extracted_profile_num, actual_user_data_dir, proc_exe_path))
-                             print(f"DEBUG: PID {proc.pid}, ADDED: ({extracted_profile_num}, '{actual_user_data_dir}', '{proc_exe_path}')")
-                        # else:
-                            # print(f"DEBUG: PID {proc.pid}, SKIPPED duplicate key: {is_duplicate_key}")
-                    # else:
-                        # print(f"DEBUG: PID {proc.pid}, NOT ADDED. Num: {extracted_profile_num}, UDD: {actual_user_data_dir}, Exe: {proc_exe_path}")
+                            print(f"DEBUG_OPEN_URL_NEW: PID={proc.pid}, SKIPPED - Could not extract UDD string from regex match.")
+                    else:
+                        print(f"DEBUG_OPEN_URL_NEW: PID={proc.pid}, SKIPPED - user_data_dir_pattern did not match.")
 
                     processed_pids.add(proc.pid)
 
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e_psutil_specific:
-                    # These are expected errors when a process disappears during iteration or is restricted.
-                    print(f"DEBUG: Handled psutil error for (likely already processed or gone) PID (approx {proc.pid if proc and hasattr(proc, 'pid') else 'N/A'}): {str(e_psutil_specific)}")
-                    continue # Continue to the next process in psutil.process_iter
-                except (TypeError, ValueError) as e_data_handling:
-                    # Errors related to data processing, e.g., if proc.info fields are None unexpectedly or int conversion fails.
-                    print(f"DEBUG: Data handling error for PID (approx {proc.pid if proc and hasattr(proc, 'pid') else 'N/A'}): {str(e_data_handling)}")
-                    continue # Continue to the next process
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue 
+                except (TypeError, ValueError, AttributeError) as e_data_handling:
+                    print(f"DEBUG_OPEN_URL_NEW_DATA_HANDLING_ERROR: PID (approx {proc.pid if proc and hasattr(proc, 'pid') else 'N/A'}): {str(e_data_handling)}")
+                    continue 
                 except Exception as e_general_proc:
-                    # Catch any other unexpected error during the processing of a single process.
-                    print(f"DEBUG: General error processing for PID (approx {proc.pid if proc and hasattr(proc, 'pid') else 'N/A'}): {str(e_general_proc)}")
-                    continue # Continue to the next process
+                    print(f"DEBUG_OPEN_URL_NEW_GENERAL_ERROR: PID (approx {proc.pid if proc and hasattr(proc, 'pid') else 'N/A'}): {str(e_general_proc)}")
+                    continue
             
-            print(f"DEBUG: FINAL target_profiles_info before deduplication (intermediate list): {target_profiles_info}")
-            if not target_profiles_info:
-                self.set_status("没有找到正在运行的、可识别的Chrome分身", "orange")
-                self.statusBar.showMessage("没有找到正在运行的Chrome分身")
-                return
+            final_target_instances = list(unique_running_instances.items()) # 转换为 [(udd, exe_path), ...] 列表
+            # Sort by UDD path for consistent ordering, though not strictly necessary for functionality
+            final_target_instances.sort(key=lambda x: x[0]) 
             
-            unique_profiles = {}
-            for num, udd, exe in target_profiles_info:
-                key = (num, udd) # 以 (编号, user_data_dir)作为唯一键
-                if key not in unique_profiles:
-                    unique_profiles[key] = exe # 存储exe路径
-            
-            final_target_profiles_info = [(num, udd, unique_profiles[(num, udd)]) for num, udd in unique_profiles.keys()]
-            final_target_profiles_info.sort(key=lambda x: x[0]) # Sort by profile number
-            
-            print(f"DEBUG: FINAL target_profiles_info after deduplication and sort: {final_target_profiles_info}")
+            print(f"DEBUG_OPEN_URL_NEW: FINAL target instances for URL opening: {final_target_instances}")
 
-            self.set_status(f"准备在 {len(final_target_profiles_info)} 个已运行分身中打开网址...", "blue")
+            if not final_target_instances:
+                self.set_status("没有找到正在运行的、可操作的Chrome实例", "orange")
+                self.statusBar.showMessage("没有找到正在运行的Chrome实例")
+                return
+
+            self.set_status(f"准备在 {len(final_target_instances)} 个已运行Chrome实例中打开网址...", "blue")
             self.statusBar.showMessage(f"正在打开网址: {url}")
             
             self.progress_bar.setValue(0)
             self.progress_bar.setVisible(True)
             
-            self.worker = BackgroundWorker(profiles_data=final_target_profiles_info, 
+            # BackgroundWorker 的 profiles_data 现在是 [(user_data_dir, exe_path), ...]
+            self.worker = BackgroundWorker(profiles_data=final_target_instances, 
                                          folder_path=None, 
                                          delay_time=self.delay_time.text(), 
                                          mode="open_url", url=url)
@@ -1254,27 +1263,38 @@ class ChromeLauncher(QMainWindow):
             self.worker.finished.connect(self.on_open_url_finished)
             self.worker.start()
                 
-        except ValueError as ve: # 捕获输入验证等错误
+        except ValueError as ve:
             self.set_status(f"输入错误: {str(ve)}", "red")
             self.statusBar.showMessage(f"输入错误: {str(ve)}")
-        except Exception as e_global: # 捕获该方法中其他所有未预料的错误
+        except Exception as e_global:
             self.set_status(f"打开URL时发生全局错误: {str(e_global)}", "red")
             self.statusBar.showMessage(f"全局错误: {str(e_global)}")
-            # 考虑在这里添加更详细的日志记录，例如 traceback
             import traceback
-            traceback.print_exc() # 打印详细的错误追溯到控制台
+            traceback.print_exc()
     
-    def on_open_url_finished(self, status_text, color, successful_numbers):
+    def on_open_url_finished(self, status_text, color, successful_instances_info):
         """打开URL完成后的回调
         
         Args:
             status_text: 状态文本
             color: 状态颜色
-            successful_numbers: 成功打开URL的编号列表
+            successful_instances_info: 成功打开URL的实例信息列表 (UDD basenames)
         """
-        self.set_status(status_text, color)
+        # self.set_status(status_text, color) # 旧的
         self.progress_bar.setVisible(False)
-        self.statusBar.showMessage(f"完成: {status_text.split('!')[0]}!")
+        # self.statusBar.showMessage(f"完成: {status_text.split('!')[0]}!") # 旧的
+        
+        # 附加当前所有已记录的"编号分身"信息，以供参考
+        current_status_text_with_launched = status_text
+        if self.launched_numbers:
+            sorted_launched_numbers = sorted(list(self.launched_numbers))
+            launched_numbers_str = ", ".join(map(str, sorted_launched_numbers))
+            current_status_text_with_launched += f" (当前已记录的编号分身: {launched_numbers_str})."
+        else:
+            current_status_text_with_launched += " (当前没有记录到已启动的编号分身)."
+
+        self.set_status(current_status_text_with_launched, color)
+        self.statusBar.showMessage(f"{status_text.split('!')[0]}! 已记录编号分身: {len(self.launched_numbers)} 个。")
     
     def browse_folder(self):
         """打开文件夹浏览对话框选择分身快捷方式目录"""
@@ -1295,6 +1315,10 @@ class ChromeLauncher(QMainWindow):
         self.settings.setValue("delay_time", self.delay_time.text())
         self.settings.setValue("specific_range", self.specific_range.text())
         self.settings.setValue("url", self.url_entry.text())
+        # 保存已启动的分身编号列表 (作为字符串列表)
+        # QSettings 不直接支持 set, 所以转换为 list of strings
+        launched_list_str = sorted([str(n) for n in self.launched_numbers])
+        self.settings.setValue("launched_numbers", launched_list_str)
     
     def load_settings(self):
         """加载用户设置"""
@@ -1306,7 +1330,22 @@ class ChromeLauncher(QMainWindow):
         delay_time = self.settings.value("delay_time", "0.5")
         specific_range = self.settings.value("specific_range", "1-10")
         url = self.settings.value("url", "https://www.example.com")
-        
+        # 加载已启动的分身编号列表
+        # 确保提供一个默认的空列表，如果键不存在
+        launched_list_str = self.settings.value("launched_numbers", [])
+        # 转换为整数集合
+        current_launched_numbers = set()
+        if isinstance(launched_list_str, list): # 确保是列表
+            for item in launched_list_str:
+                try:
+                    current_launched_numbers.add(int(item))
+                except ValueError:
+                    print(f"警告: 从设置加载 launched_numbers 时，无法转换 '{item}' 为整数。")
+        else: # 如果不是列表（例如，首次运行可能是None，或者旧格式）
+            print(f"警告: launched_numbers 从设置中加载的不是列表类型: {type(launched_list_str)}")
+            
+        self.launched_numbers = current_launched_numbers
+
         # 设置控件的值
         self.folder_path.setText(folder_path)
         self.start_num.setText(start_num)
@@ -1315,6 +1354,7 @@ class ChromeLauncher(QMainWindow):
         self.delay_time.setText(delay_time)
         self.specific_range.setText(specific_range)
         self.url_entry.setText(url)
+        self.save_settings()
     
     def closeEvent(self, event):
         """程序关闭时的事件处理"""
@@ -1322,6 +1362,111 @@ class ChromeLauncher(QMainWindow):
         self.save_settings()
         # 接受关闭事件
         event.accept()
+
+    def _sync_launched_numbers_with_running_processes(self):
+        """
+        扫描当前运行的Chrome进程，并用实际运行的分身编号更新 self.launched_numbers。
+        这确保了程序状态与系统实际状态的一致性，特别是在手动关闭分身或程序异常退出后。
+        """
+        print("DEBUG: Synchronizing launched_numbers with running processes...")
+        actually_running_profiles = set()
+        try:
+            user_data_dir_pattern = self.user_data_dir_pattern # 使用实例属性
+            profile_num_patterns = self.profile_num_patterns   # 使用实例属性
+            processed_pids_sync = set() # 避免重复处理同一进程
+
+            for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline', 'exe'], ad_value=None):
+                try:
+                    # 在每次迭代开始时初始化这些变量
+                    actual_user_data_dir_sync = None
+                    extracted_profile_num_sync = None
+
+                    if proc.pid in processed_pids_sync:
+                        continue
+                    
+                    proc_info = proc.info
+                    if not proc_info or \
+                       not proc_info.get('name') or \
+                       'chrome.exe' not in proc_info['name'].lower() or \
+                       not proc_info.get('cmdline'):
+                        continue
+                    
+                    cmd_line_list = proc_info['cmdline']
+                    cmd_line_str = " ".join(cmd_line_list)
+                    
+                    # 尝试从 user-data-dir 路径中提取编号 (更可靠)
+                    # actual_user_data_dir_sync # 已在循环顶部初始化为None
+                    # extracted_profile_num_sync # 已在循环顶部初始化为None
+                    match_ud_dir_sync = user_data_dir_pattern.search(cmd_line_str)
+                    if match_ud_dir_sync:
+                        print(f"DEBUG_SYNC_UDD_PARSE: PID={proc.pid}, user_data_dir_pattern matched. Groups: {match_ud_dir_sync.groups()}")
+                        # 提取路径，优先尝试带引号的路径组，然后尝试不带引号的路径组
+                        raw_udd_sync = match_ud_dir_sync.group('path') or match_ud_dir_sync.group('path_unquoted')
+                        
+                        if raw_udd_sync:
+                            print(f"DEBUG_SYNC_UDD_PARSE: PID={proc.pid}, Raw UDD extracted: '{raw_udd_sync}', type: {type(raw_udd_sync)}")
+                            # 不需要再手动去除引号，因为 (?P<path>[^"]+) 组已不包含引号
+                            actual_user_data_dir_sync = os.path.normpath(raw_udd_sync.strip())
+                            print(f"DEBUG_SYNC_UDD_PARSE: PID={proc.pid}, Normalized actual_user_data_dir: '{actual_user_data_dir_sync}', type: {type(actual_user_data_dir_sync)}")
+                            
+                            if actual_user_data_dir_sync: # Ensure actual_user_data_dir_sync is not None or empty
+                                path_basename_sync = os.path.basename(actual_user_data_dir_sync)
+                                match_basename_sync = re.search(r"chrome(\\\d+)", path_basename_sync, re.IGNORECASE)
+                                if match_basename_sync:
+                                    extracted_profile_num_sync = int(match_basename_sync.group(1))
+                                else:
+                                    parent_basename_sync = os.path.basename(os.path.dirname(actual_user_data_dir_sync))
+                                    match_parent_basename_sync = re.search(r"chrome(\\\d+)", parent_basename_sync, re.IGNORECASE)
+                                    if match_parent_basename_sync:
+                                         extracted_profile_num_sync = int(match_parent_basename_sync.group(1))
+                        # No explicit else here, if raw_udd_sync is None, actual_user_data_dir_sync remains None
+                    # No specific error caught here for match_ud_dir_sync being None or regex failing early for user-data-dir
+
+                    # If extracted_profile_num_sync is still None after UDD parsing, try other patterns
+                    if extracted_profile_num_sync is None:
+                        for p_pattern_sync in profile_num_patterns:
+                            match_profile_sync = p_pattern_sync.search(cmd_line_str)
+                            if match_profile_sync:
+                                try:
+                                    num_str_sync = match_profile_sync.group(1)
+                                    if p_pattern_sync.pattern == r"--profile-directory=(?:\\\"?Profile\\s+(\\\d+)\\\"?|Default)":
+                                        print(f"DEBUG_SYNC_PROFILE_DIR_MATCH: PID={proc.pid}, Pattern='{p_pattern_sync.pattern}', FullMatch='{match_profile_sync.group(0)}', Group1='{num_str_sync}', AllGroups={match_profile_sync.groups()}")
+                                    if num_str_sync:
+                                        extracted_profile_num_sync = int(num_str_sync)
+                                        print(f"DEBUG_SYNC_PROFILE_ASSIGNED: PID={proc.pid}, extracted_profile_num_sync assigned: {extracted_profile_num_sync}")
+                                        break
+                                    elif "Default" in match_profile_sync.group(0) and "Profile" not in match_profile_sync.group(0) and p_pattern_sync.pattern == r"--profile-directory=(?:\\\"?Profile\\s+(\\\d+)\\\"?|Default)":
+                                        print(f"DEBUG_SYNC_PROFILE_DIR_MATCH: PID={proc.pid}, Matched Default profile.")
+                                        pass # Default usually not counted or handled as a numbered profile here
+                                except (IndexError, ValueError, AttributeError) as e_parse_group: # Added AttributeError
+                                    print(f"DEBUG_SYNC_PROFILE_DIR_MATCH_ERROR: PID={proc.pid}, Pattern='{p_pattern_sync.pattern}', Error: {e_parse_group} for match '{match_profile_sync.group(0) if match_profile_sync else 'NO MATCH'}'")
+                                    continue # Error in group extraction or int conversion
+
+                    if extracted_profile_num_sync is not None:
+                        actually_running_profiles.add(extracted_profile_num_sync)
+                    # No "NOT ADDED" print here in sync function, only in open_url
+                    
+                    processed_pids_sync.add(proc.pid)
+
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue
+                except (TypeError, ValueError, AttributeError) as e_data_handling_sync: # Added AttributeError here too
+                    print(f"DEBUG_SYNC_DATA_HANDLING_ERROR: PID (approx {proc.pid if proc and hasattr(proc, 'pid') else 'N/A'}): {str(e_data_handling_sync)}")
+                    continue
+                except Exception as e_general_proc_sync:
+                    print(f"DEBUG_SYNC_GENERAL_ERROR: PID (approx {proc.pid if proc and hasattr(proc, 'pid') else 'N/A'}): {str(e_general_proc_sync)}")
+                    # traceback.print_exc() # Optionally re-enable for very deep debugging
+                    continue
+            
+            self.launched_numbers = actually_running_profiles
+            print(f"DEBUG: Synchronized. self.launched_numbers is now: {self.launched_numbers}")
+            # 保存同步后的状态
+            self.save_settings()
+
+        except Exception as e:
+            print(f"错误: 同步已运行分身状态失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
