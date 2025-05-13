@@ -1,6 +1,6 @@
 <div align="center">
 
-# Chrome 分身启动器
+# Chrome 分身随机启动器
 
 [![Python](https://img.shields.io/badge/Python-3.x%2B-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![Windows](https://img.shields.io/badge/Windows-10%2B-0078D6.svg?style=flat&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
