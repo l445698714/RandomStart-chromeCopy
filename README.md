@@ -27,7 +27,7 @@
 如果您觉得这个工具对您有帮助，可以请我喝杯蜜雪冰城，增加更多功能和分享更多小工具：
 <br />
 <img src="https://github.com/user-attachments/assets/b7810000-78d3-4c6b-a10d-cee4d22d6845" alt="Donation QR Code 1" width="200"/>
-<img src="https://github.com/user-attachments/assets/11952997-dd5d-4311-a085-8145acdb4950" alt="Donation QR Code 2" width="200"/>
+<img src="https://github.com/user-attachments/assets/11952997-dd5d-4311-a085-8145acdb4950" alt="Donation QR Code 2" width="180"/>
 
 ## ❇️ 功能特性
 
