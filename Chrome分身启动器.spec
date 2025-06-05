@@ -1,18 +1,36 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
     ['Chrome_launcher.py'],
     pathex=[],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=[
+        ('icons', 'icons'),
+        ('ico.ico', '.'),
+    ],
+    hiddenimports=[
+        'PyQt5.QtCore',
+        'PyQt5.QtGui',
+        'PyQt5.QtWidgets',
+        'win32com.client',
+        'win32gui',
+        'win32process',
+        'win32con',
+        'win32api',
+        'psutil',
+        'chrome_icon_manager',
+        'utils',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'matplotlib',
+        'numpy',
+        'pandas',
+        'scipy',
+    ],
     noarchive=False,
-    optimize=0,
 )
 pyz = PYZ(a.pure)
 
@@ -35,4 +53,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='ico.ico',
 )
