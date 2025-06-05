@@ -1,2 +1,4 @@
 PyQt5>=5.15.0
-psutil>=5.8.0 
+psutil>=5.8.0
+pywin32>=227
+pyinstaller>=4.10 
