@@ -1,27 +1,32 @@
-VSVersionInfo(
-  ffi=FixedFileInfo(
-    filevers=(1, 0, 0, 0),
-    prodvers=(1, 0, 0, 0),
-    mask=0x3f,
-    flags=0x0,
-    OS=0x40004,
-    fileType=0x1,
-    subtype=0x0,
-    date=(0, 0)
-  ),
-  kids=[
-    StringFileInfo([
-      StringTable(
-        u'040904B0',
-        [StringStruct(u'CompanyName', u'Your Company'),
-         StringStruct(u'FileDescription', u'Chrome分身启动器'),
-         StringStruct(u'FileVersion', u'1.0.0'),
-         StringStruct(u'InternalName', u'ChromeLauncher'),
-         StringStruct(u'LegalCopyright', u'Copyright (c) 2024'),
-         StringStruct(u'OriginalFilename', u'ChromeLauncher.exe'),
-         StringStruct(u'ProductName', u'Chrome分身启动器'),
-         StringStruct(u'ProductVersion', u'1.0.0')])
-    ]),
-    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
-  ]
-) 
+Chrome分身启动器 版本信息
+==========================
+
+版本号: v2.3.0
+发布日期: 2025-01-05
+作者: l445698714
+
+更新内容:
+---------
+
+🎯 新增三大核心功能:
+• 智能随机启动 - 在指定范围内随机选择分身启动
+• 专业图标替换 - 45个预设图标 + 无限动态生成
+• 批量分身创建 - 自动创建Chrome分身配置和快捷方式
+
+🔧 功能优化:
+• 三行状态显示 (正在启动/已启动/未启动)
+• 图标自动应用机制
+• 完善的错误处理和进度反馈
+• 现代化PyQt5界面设计
+
+🛠️ 技术改进:
+• 动态图标生成算法
+• 智能进程管理
+• 设置持久化存储
+• 完整的构建脚本支持
+
+📊 支持特性:
+• 无限数量分身支持
+• 多种启动模式
+• 图标缓存机制
+• 快捷方式管理

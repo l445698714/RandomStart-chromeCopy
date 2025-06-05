@@ -1,78 +1,83 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-清理项目中的临时文件和编译文件
+清理脚本 - 清理生成的图标缓存和临时文件
+作者：l445698714
 """
 
 import os
 import shutil
-import sys
 
-def clean_project():
-    """清理项目中的临时文件和编译文件"""
-    print("开始清理项目...")
+def clean_icons():
+    """清理生成的图标文件"""
+    icons_dir = "icons"
     
-    # 要删除的文件扩展名
-    extensions_to_remove = [
-        '.pyc',      # Python编译文件
-        '.pyo',      # Python优化编译文件
-        '.pyd',      # Python动态链接库
-        '.~',        # 临时文件
-        '.bak',      # 备份文件
-        '.swp',      # Vim临时文件
-        '.log',      # 日志文件
-    ]
+    if not os.path.exists(icons_dir):
+        print("icons目录不存在")
+        return
     
-    # 要删除的目录
-    dirs_to_remove = [
-        '__pycache__',   # Python缓存目录
-        '.pytest_cache',  # pytest缓存
-        'build',         # 构建目录
-        'dist',          # 分发目录
-        '.eggs',         # eggs目录
-        '*.egg-info',    # egg信息
-        '.coverage',     # 覆盖率报告
-    ]
+    # 只清理动态生成的图标（编号>45的图标）
+    cleaned_count = 0
+    for filename in os.listdir(icons_dir):
+        if filename.startswith("chrome_") and filename.endswith(".ico"):
+            try:
+                number = int(filename[7:-4])  # 提取编号
+                if number > 45:  # 只清理动态生成的图标
+                    file_path = os.path.join(icons_dir, filename)
+                    os.remove(file_path)
+                    print(f"已删除动态图标: {filename}")
+                    cleaned_count += 1
+            except ValueError:
+                continue
     
-    # 获取当前目录
-    current_dir = os.getcwd()
+    print(f"共清理了 {cleaned_count} 个动态生成的图标")
+
+def clean_cache():
+    """清理Python缓存"""
+    cache_dirs = ['__pycache__', 'build', 'dist']
     
-    # 删除文件
-    files_removed = 0
-    for root, dirs, files in os.walk(current_dir):
-        # 删除指定扩展名的文件
+    for cache_dir in cache_dirs:
+        if os.path.exists(cache_dir):
+            shutil.rmtree(cache_dir)
+            print(f"已删除缓存目录: {cache_dir}")
+    
+    # 清理.pyc文件
+    for root, dirs, files in os.walk('.'):
         for file in files:
-            for ext in extensions_to_remove:
-                if file.endswith(ext):
-                    try:
-                        os.remove(os.path.join(root, file))
-                        print(f"已删除文件: {os.path.join(root, file)}")
-                        files_removed += 1
-                    except Exception as e:
-                        print(f"删除文件失败: {os.path.join(root, file)} - {str(e)}")
+            if file.endswith('.pyc'):
+                file_path = os.path.join(root, file)
+                os.remove(file_path)
+                print(f"已删除缓存文件: {file_path}")
+
+def clean_spec_files():
+    """清理PyInstaller规范文件"""
+    spec_files = ['Chrome_launcher.spec', 'Chrome分身启动器.spec', 'ChromeLauncher.spec']
     
-    # 删除目录
-    dirs_removed = 0
-    for root, dirs, files in os.walk(current_dir, topdown=False):
-        for dir_name in dirs:
-            for pattern in dirs_to_remove:
-                if dir_name == pattern or (pattern.endswith('*') and dir_name.startswith(pattern[:-1])):
-                    try:
-                        dir_path = os.path.join(root, dir_name)
-                        shutil.rmtree(dir_path)
-                        print(f"已删除目录: {dir_path}")
-                        dirs_removed += 1
-                    except Exception as e:
-                        print(f"删除目录失败: {dir_path} - {str(e)}")
+    for spec_file in spec_files:
+        if os.path.exists(spec_file):
+            os.remove(spec_file)
+            print(f"已删除规范文件: {spec_file}")
+
+def main():
+    print("Chrome分身启动器 - 清理脚本")
+    print("=" * 40)
     
-    print(f"\n清理完成! 已删除 {files_removed} 个文件和 {dirs_removed} 个目录。")
+    choice = input("请选择清理类型:\n1. 清理动态图标\n2. 清理Python缓存\n3. 清理规范文件\n4. 全部清理\n请输入选择 (1-4): ")
+    
+    if choice == '1':
+        clean_icons()
+    elif choice == '2':
+        clean_cache()
+    elif choice == '3':
+        clean_spec_files()
+    elif choice == '4':
+        clean_icons()
+        clean_cache()
+        clean_spec_files()
+    else:
+        print("无效选择")
+    
+    print("\n清理完成！")
 
 if __name__ == "__main__":
-    # 确认是否继续
-    if len(sys.argv) > 1 and sys.argv[1] == "--force":
-        clean_project()
-    else:
-        confirm = input("此操作将删除项目中的临时文件和编译文件。确定要继续吗? (y/n): ")
-        if confirm.lower() in ['y', 'yes']:
-            clean_project()
-        else:
-            print("操作已取消。") 
+    main()
